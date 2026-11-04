@@ -146,67 +146,55 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget _buildHeader() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          // ─── Brand block (logo + name) ────────────────────────
-          Row(
-            children: [
-              // Bare logo — no container, no box, no shadow
-              SizedBox(
-                width: 120,
-                height: 120,
-                child: Image.asset(
-                  'assets/logo.png',
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Icon(
-                    Icons.eco,
-                    color: AppColors.mint400,
-                    size: 56,
-                  ),
-                ),
+          // ─── Centered Logo ──────────────────────────────────────
+          SizedBox(
+            width: 120,   // ← Change this number to resize the logo
+            height: 120,  // ← Change this number to resize the logo
+            child: Image.asset(
+              'assets/logo.png',
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Icon(
+                Icons.eco,
+                color: AppColors.mint400,
+                size: 56,
               ),
-              const SizedBox(width: 12),
-              const Text(
-                ' ',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.4,
-                ),
-              ),
-            ],
-          ), // ← closes brand Row
+            ),
+          ),
 
-          // ─── Skip pill ────────────────────────────────────────
-          _GlassPill(
-            onTap: _goToAuth,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Skip',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+          // ─── Right-Aligned Skip Button ──────────────────────────
+          Align(
+            alignment: Alignment.centerRight,
+            child: _GlassPill(
+              onTap: _goToAuth,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Skip',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 4),
-                Icon(
-                  Icons.chevron_right,
-                  size: 14,
-                  color: Colors.white.withOpacity(0.7),
-                ),
-              ],
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.chevron_right,
+                    size: 14,
+                    color: Colors.white.withOpacity(0.7),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
-      ), // ← closes outer Row
-    ); // ← closes Padding
-  } // ← closes _buildHeader
+      ),
+    );
+  }
 
   // ─── Bottom content ─────────────────────────────────────────────
   Widget _buildContent() {

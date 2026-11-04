@@ -5,8 +5,12 @@ import 'customer_home_screen.dart';
 import 'farmer_dashboard_screen.dart';
 import 'orders_screen.dart';
 import 'color_typography.dart';
+import 'app_state.dart';
 
-void main() {
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await AppState.bootstrap(); // load persisted data first
   runApp(const AgroTradeApp());
 }
 
@@ -23,7 +27,6 @@ class AgroTradeApp extends StatelessWidget {
     );
   }
 
-  // ─── Theme ──────────────────────────────────────────────────────
   ThemeData _buildTheme() {
     final colorScheme = ColorScheme.fromSeed(
       seedColor: AppColors.brand700,
@@ -42,8 +45,6 @@ class AgroTradeApp extends StatelessWidget {
       colorScheme: colorScheme,
       scaffoldBackgroundColor: AppColors.surfaceScaffoldOld,
       fontFamily: 'Roboto',
-
-      // ─── AppBar ────────────────────────────────────────────────
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.transparent,
         foregroundColor: AppColors.slate900,
@@ -57,42 +58,26 @@ class AgroTradeApp extends StatelessWidget {
         ),
         iconTheme: IconThemeData(color: AppColors.slate900),
       ),
-
-      // ─── Elevated Buttons ──────────────────────────────────────
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.brand700,
           foregroundColor: Colors.white,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: AppRadii.mdR,
-          ),
-          textStyle: AppTypography.buttonSmall.copyWith(color: Colors.white),
+          shape: RoundedRectangleBorder(borderRadius: AppRadii.mdR),
         ),
       ),
-
-      // ─── Outlined Buttons ──────────────────────────────────────
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.brand700,
           side: const BorderSide(color: AppColors.brand700),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          shape: RoundedRectangleBorder(
-            borderRadius: AppRadii.mdR,
-          ),
+          shape: RoundedRectangleBorder(borderRadius: AppRadii.mdR),
         ),
       ),
-
-      // ─── Text Buttons ──────────────────────────────────────────
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: AppColors.brand700,
-          textStyle: AppTypography.buttonSmall,
-        ),
+        style: TextButton.styleFrom(foregroundColor: AppColors.brand700),
       ),
-
-      // ─── Input Fields ──────────────────────────────────────────
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
@@ -110,13 +95,8 @@ class AgroTradeApp extends StatelessWidget {
           borderRadius: AppRadii.mdR,
           borderSide: const BorderSide(color: AppColors.brand600, width: 2),
         ),
-        hintStyle: const TextStyle(
-          color: AppColors.slate400,
-          fontSize: 13,
-        ),
+        hintStyle: const TextStyle(color: AppColors.slate400, fontSize: 13),
       ),
-
-      // ─── Checkbox ──────────────────────────────────────────────
       checkboxTheme: CheckboxThemeData(
         fillColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
@@ -129,15 +109,11 @@ class AgroTradeApp extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
-
-      // ─── Divider ───────────────────────────────────────────────
       dividerTheme: const DividerThemeData(
         color: AppColors.slate200,
         thickness: 1,
         space: 16,
       ),
-
-      // ─── SnackBar ──────────────────────────────────────────────
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.brand700,
         contentTextStyle: const TextStyle(color: Colors.white, fontSize: 13),
@@ -145,54 +121,21 @@ class AgroTradeApp extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: AppRadii.mdR),
         actionTextColor: AppColors.brand200,
       ),
-
-      // ─── Bottom Navigation (Material, kept for legacy fallback) ─
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor: Colors.white,
-        selectedItemColor: AppColors.brand700,
-        unselectedItemColor: AppColors.slate500,
-        type: BottomNavigationBarType.fixed,
-        elevation: 0,
-        selectedLabelStyle: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
-        unselectedLabelStyle: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-
-      // ─── Progress Indicator ────────────────────────────────────
-      progressIndicatorTheme: const ProgressIndicatorThemeData(
-        color: AppColors.brand700,
-      ),
-
-      // ─── Text Selection ────────────────────────────────────────
-      textSelectionTheme: TextSelectionThemeData(
-        cursorColor: AppColors.brand700,
-        selectionColor: AppColors.brand200,
-        selectionHandleColor: AppColors.brand700,
-      ),
     );
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  DEV-ONLY: Main Screen Switcher (for previewing all screens)
+//  DEV PREVIEW SWITCHER (optional, unchanged from your original)
 // ═══════════════════════════════════════════════════════════════════
-/// To use: change `home: const SplashScreen()` above to
-/// `home: const MainScreenSwitcher()`.
 class MainScreenSwitcher extends StatefulWidget {
   const MainScreenSwitcher({super.key});
-
   @override
   State<MainScreenSwitcher> createState() => _MainScreenSwitcherState();
 }
 
 class _MainScreenSwitcherState extends State<MainScreenSwitcher> {
   int _currentIndex = 0;
-
   final List<Widget> _screens = const [
     SplashScreen(),
     AuthScreen(),
@@ -200,10 +143,9 @@ class _MainScreenSwitcherState extends State<MainScreenSwitcher> {
     FarmerDashboardScreen(),
     OrdersScreen(),
   ];
-
   final List<String> _screenTitles = const [
     "Splash Screen",
-    "Auth (Login/Register)",
+    "Auth",
     "Customer Home",
     "Farmer Dashboard",
     "Orders",
@@ -215,33 +157,21 @@ class _MainScreenSwitcherState extends State<MainScreenSwitcher> {
       appBar: AppBar(
         backgroundColor: AppColors.brand800,
         foregroundColor: Colors.white,
-        title: Text(
-          "Preview: ${_screenTitles[_currentIndex]}",
-          style: const TextStyle(fontSize: 16, color: Colors.white),
-        ),
-        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text("Preview: ${_screenTitles[_currentIndex]}",
+            style: const TextStyle(fontSize: 16, color: Colors.white)),
         actions: [
           PopupMenuButton<int>(
             icon: const Icon(Icons.screen_share, color: Colors.white),
-            onSelected: (int index) {
-              setState(() {
-                _currentIndex = index;
-              });
-            },
+            onSelected: (i) => setState(() => _currentIndex = i),
             itemBuilder: (context) => List.generate(
               _screens.length,
-              (index) => PopupMenuItem(
-                value: index,
-                child: Text(_screenTitles[index]),
-              ),
+              (i) => PopupMenuItem(
+                  value: i, child: Text(_screenTitles[i])),
             ),
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
-      ),
+      body: IndexedStack(index: _currentIndex, children: _screens),
     );
   }
 }

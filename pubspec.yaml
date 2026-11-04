@@ -11,28 +11,31 @@ dependencies:
   flutter:
     sdk: flutter
 
-  cupertino_icons: ^1.0.8
-  
-  # Added for the splash screen slider dots
-  smooth_page_indicator: ^1.1.0
+  # Local persistence
+  shared_preferences: ^2.2.3
+
+  # Icons
+  cupertino_icons: ^2.0.0
+
+  # Splash screen slider dots
+  smooth_page_indicator: ^3.0.0
+
+  # ── NEW: image loading from internet + local files ──
+  cached_network_image: ^4.0.6   # loads & caches product images from URLs
+  image_picker: ^1.1.2           # camera + gallery picker (works offline)
+  file_picker: ^13.3.2            # browse device files for images
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
   flutter_lints: ^6.0.0
 
 flutter:
-  # The following line ensures that the Material Icons font is
-  # included with your application, so that you can use the icons in
-  # the material Icons class.
   uses-material-design: true
 
-  # To add assets to your application, add an assets section, like this:
   assets:
     - assets/mm.png
     - assets/toma.png
     - assets/ono.png
     - assets/logo.png
     - assets/bana.png
-    
