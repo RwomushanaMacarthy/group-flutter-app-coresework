@@ -17,10 +17,9 @@ class _AuthScreenState extends State<AuthScreen> {
   bool obscurePassword = true;
   bool rememberDevice = true;
 
-  final _identifierCtrl = TextEditingController();
+  final _identifierCtrl = TextEditingController(); // Used for Email in register mode
   final _passwordCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
-  final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
 
   @override
@@ -35,7 +34,6 @@ class _AuthScreenState extends State<AuthScreen> {
     _identifierCtrl.dispose();
     _passwordCtrl.dispose();
     _nameCtrl.dispose();
-    _emailCtrl.dispose();
     _phoneCtrl.dispose();
     super.dispose();
   }
@@ -64,15 +62,17 @@ class _AuthScreenState extends State<AuthScreen> {
         return;
       }
     } else {
+      // Validating the actual controllers used in the form
       if (_nameCtrl.text.trim().isEmpty ||
-          _emailCtrl.text.trim().isEmpty ||
+          _identifierCtrl.text.trim().isEmpty ||
           _passwordCtrl.text.isEmpty) {
         _snack('Please fill in all required fields', error: true);
         return;
       }
+      
       final err = s.register(
         name: _nameCtrl.text,
-        email: _emailCtrl.text,
+        email: _identifierCtrl.text, // Using identifier as email
         password: _passwordCtrl.text,
         role: isFarmerRole ? 'farmer' : 'customer',
         phone: _phoneCtrl.text,
@@ -83,17 +83,7 @@ class _AuthScreenState extends State<AuthScreen> {
       }
     }
 
-    if (isFarmerRole) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const FarmerDashboardScreen()),
-      );
-    } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const CustomerHomeScreen()),
-      );
-    }
+    // Navigation is handled automatically by _RootRouter in main.dart!
   }
 
   void _snack(String msg, {bool error = false}) {
@@ -391,7 +381,7 @@ class _AuthScreenState extends State<AuthScreen> {
         const SizedBox(height: 14),
         _buildPrimaryButton(),
         const SizedBox(height: 12),
-        _buildBiometricButton(),
+        _buildBiometricButton(), // This is now disabled
       ],
     );
   }
@@ -488,38 +478,24 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Widget _buildBiometricButton() {
+    // DISABLED: onPressed is set to null to grey it out
     return OutlinedButton.icon(
-      onPressed: () {
-        final err = AppState.instance.login(
-          identifier: isFarmerRole ? 'farmer' : 'customer',
-          password: 'password',
-          role: isFarmerRole ? 'farmer' : 'customer',
-        );
-        if (err != null) {
-          _snack(err, error: true);
-          return;
-        }
-        if (isFarmerRole) {
-          Navigator.pushReplacement(context,
-              MaterialPageRoute(builder: (_) => const FarmerDashboardScreen()));
-        } else {
-          Navigator.pushReplacement(context,
-              MaterialPageRoute(builder: (_) => const CustomerHomeScreen()));
-        }
-      },
-      icon: const Icon(Icons.fingerprint, size: 18, color: AppColors.brand700),
+      onPressed: null, 
+      icon: const Icon(Icons.fingerprint, size: 18, color: AppColors.stone400),
       label: const Text(
         'Log In with Face ID / Biometrics',
         style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w700,
-          color: AppColors.brand800,
+          color: AppColors.stone400, // Greyed out text
         ),
       ),
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 14),
-        backgroundColor: AppColors.brand50,
-        side: const BorderSide(color: AppColors.brand200),
+        backgroundColor: AppColors.stone100, // Greyed out background
+        disabledForegroundColor: AppColors.stone400,
+        disabledBackgroundColor: AppColors.stone100,
+        side: const BorderSide(color: AppColors.stone200),
         shape: RoundedRectangleBorder(borderRadius: AppRadii.mdR),
       ),
     );
