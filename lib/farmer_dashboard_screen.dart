@@ -6,6 +6,7 @@ import 'farmer_manage_products_screen.dart';
 import 'farmer_orders_screen.dart';
 import 'farmer_profile_screen.dart';
 import 'product_image_view.dart';
+import 'dart:io';
 
 class FarmerDashboardScreen extends StatefulWidget {
   const FarmerDashboardScreen({super.key});
@@ -196,13 +197,35 @@ class _DashboardHome extends StatelessWidget {
 
   Widget _buildHeader() {
     final p = AppState.instance.profile;
+    final user = AppState.instance.currentUser;
+    final displayName = user?.name ?? p.name;
+
+    Widget avatar;
+    if (user != null &&
+        user.localAvatarPath.isNotEmpty &&
+        File(user.localAvatarPath).existsSync()) {
+      avatar = CircleAvatar(
+        radius: 22,
+        backgroundImage: FileImage(File(user.localAvatarPath)),
+        backgroundColor: AppColors.brand200,
+      );
+    } else if (user != null && user.avatarUrl.isNotEmpty) {
+      avatar = CircleAvatar(
+        radius: 22,
+        backgroundImage: NetworkImage(user.avatarUrl),
+        backgroundColor: AppColors.brand200,
+      );
+    } else {
+      avatar = CircleAvatar(
+        radius: 22,
+        backgroundImage: NetworkImage(p.avatarUrl),
+        backgroundColor: AppColors.brand200,
+      );
+    }
+
     return Row(
       children: [
-        CircleAvatar(
-          radius: 22,
-          backgroundImage: NetworkImage(p.avatarUrl),
-          backgroundColor: AppColors.brand200,
-        ),
+        avatar,
         const SizedBox(width: 10),
         Expanded(
           child: Column(
@@ -210,7 +233,9 @@ class _DashboardHome extends StatelessWidget {
             children: [
               const Text('Good Morning,',
                   style: TextStyle(fontSize: 11, color: AppColors.slate500)),
-              Text(p.name,
+              Text(displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,

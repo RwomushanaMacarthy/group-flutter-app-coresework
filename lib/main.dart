@@ -1,21 +1,42 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'splash_screen.dart';
-import 'auth_screen.dart';
 import 'customer_home_screen.dart';
 import 'farmer_dashboard_screen.dart';
-import 'orders_screen.dart';
 import 'color_typography.dart';
 import 'app_state.dart';
-
+import 'connectivity_banner.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await AppState.bootstrap(); // load persisted data first
+  await AppState.bootstrap();
   runApp(const AgroTradeApp());
 }
 
-class AgroTradeApp extends StatelessWidget {
+class AgroTradeApp extends StatefulWidget {
   const AgroTradeApp({super.key});
+
+  @override
+  State<AgroTradeApp> createState() => _AgroTradeAppState();
+}
+
+class _AgroTradeAppState extends State<AgroTradeApp> {
+  Timer? _connectivityTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _connectivityTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => AppState.instance.refreshConnectivity(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _connectivityTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +44,7 @@ class AgroTradeApp extends StatelessWidget {
       title: 'AgroTrade',
       debugShowCheckedModeBanner: false,
       theme: _buildTheme(),
-      home: const SplashScreen(),
+      home: const _RootRouter(),
     );
   }
 
@@ -81,8 +102,7 @@ class AgroTradeApp extends StatelessWidget {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: AppRadii.mdR,
           borderSide: const BorderSide(color: AppColors.slate200),
@@ -125,53 +145,44 @@ class AgroTradeApp extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════
-//  DEV PREVIEW SWITCHER (optional, unchanged from your original)
-// ═══════════════════════════════════════════════════════════════════
-class MainScreenSwitcher extends StatefulWidget {
-  const MainScreenSwitcher({super.key});
+/// Routes based on current auth state.
+class _RootRouter extends StatefulWidget {
+  const _RootRouter();
+
   @override
-  State<MainScreenSwitcher> createState() => _MainScreenSwitcherState();
+  State<_RootRouter> createState() => _RootRouterState();
 }
 
-class _MainScreenSwitcherState extends State<MainScreenSwitcher> {
-  int _currentIndex = 0;
-  final List<Widget> _screens = const [
-    SplashScreen(),
-    AuthScreen(),
-    CustomerHomeScreen(),
-    FarmerDashboardScreen(),
-    OrdersScreen(),
-  ];
-  final List<String> _screenTitles = const [
-    "Splash Screen",
-    "Auth",
-    "Customer Home",
-    "Farmer Dashboard",
-    "Orders",
-  ];
+class _RootRouterState extends State<_RootRouter> {
+  @override
+  void initState() {
+    super.initState();
+    AppState.instance.addListener(_onAppStateChanged);
+  }
+
+  @override
+  void dispose() {
+    AppState.instance.removeListener(_onAppStateChanged);
+    super.dispose();
+  }
+
+  void _onAppStateChanged() {
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: AppColors.brand800,
-        foregroundColor: Colors.white,
-        title: Text("Preview: ${_screenTitles[_currentIndex]}",
-            style: const TextStyle(fontSize: 16, color: Colors.white)),
-        actions: [
-          PopupMenuButton<int>(
-            icon: const Icon(Icons.screen_share, color: Colors.white),
-            onSelected: (i) => setState(() => _currentIndex = i),
-            itemBuilder: (context) => List.generate(
-              _screens.length,
-              (i) => PopupMenuItem(
-                  value: i, child: Text(_screenTitles[i])),
-            ),
-          ),
-        ],
-      ),
-      body: IndexedStack(index: _currentIndex, children: _screens),
-    );
+    final s = AppState.instance;
+    Widget home;
+    
+    if (!s.isLoggedIn) {
+      home = const SplashScreen();
+    } else if (s.currentUser!.role == 'farmer') {
+      home = const FarmerDashboardScreen();
+    } else {
+      home = const CustomerHomeScreen();
+    }
+
+    return ConnectivityBanner(child: home);
   }
 }

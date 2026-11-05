@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'color_typography.dart';
 import 'app_state.dart';
 
@@ -10,6 +12,64 @@ class FarmerProfileScreen extends StatefulWidget {
 }
 
 class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
+  final _picker = ImagePicker();
+
+  Future<void> _pickAvatar() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Change Profile Photo',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.slate900)),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined,
+                  color: AppColors.brand700),
+              title: const Text('Take a photo'),
+              onTap: () => Navigator.pop(context, 'camera'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined,
+                  color: AppColors.brand700),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.pop(context, 'gallery'),
+            ),
+            if (AppState.instance.currentUser != null &&
+                AppState.instance.currentUser!.localAvatarPath.isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.delete_outline,
+                    color: AppColors.statusRejectedText),
+                title: const Text('Remove photo'),
+                onTap: () => Navigator.pop(context, 'remove'),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null) return;
+    if (choice == 'remove') {
+      await AppState.instance
+          .updateCurrentUserAvatar(localAvatarPath: '');
+      return;
+    }
+    final src = choice == 'camera' ? ImageSource.camera : ImageSource.gallery;
+    final f =
+        await _picker.pickImage(source: src, imageQuality: 75, maxWidth: 600);
+    if (f != null) {
+      await AppState.instance
+          .updateCurrentUserAvatar(localAvatarPath: f.path);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppState.instance;
@@ -17,12 +77,54 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
       animation: s,
       builder: (context, _) {
         final p = s.profile;
+        final user = s.currentUser;
+
+        // Build avatar widget with fallback
+        Widget avatar;
+        if (user != null &&
+            user.localAvatarPath.isNotEmpty &&
+            File(user.localAvatarPath).existsSync()) {
+          avatar = CircleAvatar(
+            radius: 44,
+            backgroundImage: FileImage(File(user.localAvatarPath)),
+            backgroundColor: AppColors.brand200,
+          );
+        } else if (user != null && user.avatarUrl.isNotEmpty) {
+          avatar = CircleAvatar(
+            radius: 44,
+            backgroundImage: NetworkImage(user.avatarUrl),
+            backgroundColor: AppColors.brand200,
+          );
+        } else if (p.avatarUrl.isNotEmpty) {
+          avatar = CircleAvatar(
+            radius: 44,
+            backgroundImage: NetworkImage(p.avatarUrl),
+            backgroundColor: AppColors.brand200,
+          );
+        } else {
+          avatar = CircleAvatar(
+            radius: 44,
+            backgroundColor: AppColors.brand200,
+            child: Text(
+              (user?.name.isNotEmpty ?? false)
+                  ? user!.name[0].toUpperCase()
+                  : 'F',
+              style: const TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white),
+            ),
+          );
+        }
+
+        final displayName = user?.name ?? p.name;
+
         return SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ─── Profile header card ──────────────────────────
+              // Header card
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -36,13 +138,31 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
                 ),
                 child: Column(
                   children: [
-                    CircleAvatar(
-                      radius: 44,
-                      backgroundImage: NetworkImage(p.avatarUrl),
-                      backgroundColor: AppColors.brand200,
+                    Stack(
+                      children: [
+                        avatar,
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: GestureDetector(
+                            onTap: _pickAvatar,
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                    color: AppColors.brand200, width: 2),
+                              ),
+                              child: const Icon(Icons.camera_alt,
+                                  size: 14, color: AppColors.brand700),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
-                    Text(p.name,
+                    Text(displayName,
                         style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -72,7 +192,7 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
               ),
               const SizedBox(height: 16),
 
-              // ─── Stats row ─────────────────────────────────────
+              // Stats row
               Row(
                 children: [
                   _statCard(
@@ -88,14 +208,14 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
               ),
               const SizedBox(height: 20),
 
-              // ─── Details ───────────────────────────────────────
+              // Contact info
               _sectionCard(
                 title: 'Contact Information',
                 children: [
                   _detailRow(Icons.phone_outlined, 'Phone', p.phone),
                   _detailRow(Icons.email_outlined, 'Email', p.email),
-                  _detailRow(Icons.location_on_outlined, 'Location',
-                      p.location),
+                  _detailRow(
+                      Icons.location_on_outlined, 'Location', p.location),
                 ],
               ),
               const SizedBox(height: 12),
@@ -111,7 +231,7 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
               ),
               const SizedBox(height: 12),
 
-              // ─── Reviews ───────────────────────────────────────
+              // Reviews
               _sectionCard(
                 title: 'Customer Reviews',
                 children: s.reviews
@@ -147,7 +267,7 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
               ),
               const SizedBox(height: 16),
 
-              // ─── Edit + Logout ─────────────────────────────────
+              // Edit + Logout
               SizedBox(
                 height: 46,
                 child: ElevatedButton.icon(
@@ -161,8 +281,8 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
                           color: Colors.white)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.brand700,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: AppRadii.mdR),
+                    shape:
+                        RoundedRectangleBorder(borderRadius: AppRadii.mdR),
                   ),
                 ),
               ),
@@ -170,8 +290,12 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
               SizedBox(
                 height: 46,
                 child: OutlinedButton.icon(
-                  onPressed: () => Navigator.of(context)
-                      .pushNamedAndRemoveUntil('/', (route) => false),
+                  onPressed: () async {
+                    await AppState.instance.logout();
+                    if (!context.mounted) return;
+                    Navigator.of(context)
+                        .pushNamedAndRemoveUntil('/', (route) => false);
+                  },
                   icon: const Icon(Icons.logout,
                       size: 16, color: AppColors.statusRejectedText),
                   label: const Text('Log Out',
@@ -182,8 +306,8 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(
                         color: AppColors.statusRejectedText),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: AppRadii.mdR),
+                    shape:
+                        RoundedRectangleBorder(borderRadius: AppRadii.mdR),
                   ),
                 ),
               ),
@@ -339,8 +463,8 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.brand700,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: AppRadii.mdR),
+                    shape:
+                        RoundedRectangleBorder(borderRadius: AppRadii.mdR),
                   ),
                   child: const Text('Save Changes',
                       style: TextStyle(
@@ -376,8 +500,8 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
             decoration: InputDecoration(
               filled: true,
               fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 12),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               border: OutlineInputBorder(
                 borderRadius: AppRadii.mdR,
                 borderSide: const BorderSide(color: AppColors.slate200),

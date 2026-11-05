@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'auth_screen.dart';
+import 'customer_home_screen.dart';
+import 'farmer_dashboard_screen.dart';
 import 'color_typography.dart';
+import 'app_state.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -25,6 +28,22 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
     _startAutoScroll();
+
+    // If already logged in, auto-navigate after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final s = AppState.instance;
+      if (s.isLoggedIn) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => s.currentUser!.role == 'farmer'
+                ? const FarmerDashboardScreen()
+                : const CustomerHomeScreen(),
+          ),
+        );
+      }
+    });
   }
 
   void _startAutoScroll() {
@@ -59,7 +78,6 @@ class _SplashScreenState extends State<SplashScreen> {
       backgroundColor: AppColors.forest900,
       body: Stack(
         children: [
-          // ─── 1. Full-screen hero carousel ───────────────────────
           Positioned.fill(
             child: PageView.builder(
               controller: _pageController,
@@ -75,9 +93,6 @@ class _SplashScreenState extends State<SplashScreen> {
               },
             ),
           ),
-
-          // ─── 2. Atmospheric gradients ───────────────────────────
-          // Top vignette
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -92,7 +107,6 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
             ),
           ),
-          // Bottom heavy gradient into forest background
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -110,7 +124,6 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
             ),
           ),
-          // Subtle edge vignette
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -126,8 +139,6 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
             ),
           ),
-
-          // ─── 3. Content ─────────────────────────────────────────
           SafeArea(
             child: Column(
               children: [
@@ -142,17 +153,15 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 
-  // ─── Header: Logo + Skip ────────────────────────────────────────
   Widget _buildHeader() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // ─── Centered Logo ──────────────────────────────────────
           SizedBox(
-            width: 120,   // ← Change this number to resize the logo
-            height: 120,  // ← Change this number to resize the logo
+            width: 120,
+            height: 120,
             child: Image.asset(
               'assets/logo.png',
               fit: BoxFit.contain,
@@ -163,8 +172,6 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
             ),
           ),
-
-          // ─── Right-Aligned Skip Button ──────────────────────────
           Align(
             alignment: Alignment.centerRight,
             child: _GlassPill(
@@ -196,7 +203,6 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 
-  // ─── Bottom content ─────────────────────────────────────────────
   Widget _buildContent() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
@@ -204,7 +210,6 @@ class _SplashScreenState extends State<SplashScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Feature pills
           const Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -215,15 +220,10 @@ class _SplashScreenState extends State<SplashScreen> {
             ],
           ),
           const SizedBox(height: 20),
-
-          // Headline with gradient accent
           LayoutBuilder(
             builder: (context, constraints) {
               final shader = const LinearGradient(
-                colors: [
-                  AppColors.mint400,
-                  AppColors.emerald200,
-                ],
+                colors: [AppColors.mint400, AppColors.emerald200],
               ).createShader(
                 Rect.fromLTWH(0, 0, constraints.maxWidth, 40),
               );
@@ -251,8 +251,6 @@ class _SplashScreenState extends State<SplashScreen> {
             },
           ),
           const SizedBox(height: 12),
-
-          // Subtitle
           Text(
             'A platform where you can buy and sell fresh produce at '
             'competitive prices. Connect with farmers, local grocers, '
@@ -265,8 +263,6 @@ class _SplashScreenState extends State<SplashScreen> {
             ),
           ),
           const SizedBox(height: 20),
-
-          // Step indicators
           Row(
             children: List.generate(_images.length, (i) {
               final active = i == _currentPage;
@@ -294,8 +290,6 @@ class _SplashScreenState extends State<SplashScreen> {
             }),
           ),
           const SizedBox(height: 24),
-
-          // Primary CTA — gradient button
           GestureDetector(
             onTap: _goToAuth,
             child: Container(
@@ -339,16 +333,8 @@ class _SplashScreenState extends State<SplashScreen> {
             ),
           ),
           const SizedBox(height: 12),
-
-          // Secondary CTA — glass button
-          _GlassButton(
-            onTap: () {},
-            label: 'Explore Marketplace',
-          ),
-
+          _GlassButton(onTap: () {}, label: 'Explore Marketplace'),
           const SizedBox(height: 10),
-
-          // Footer note
           Center(
             child: Text(
               'trade with us today',
@@ -359,8 +345,6 @@ class _SplashScreenState extends State<SplashScreen> {
             ),
           ),
           const SizedBox(height: 8),
-
-          // iOS home indicator
           Center(
             child: Container(
               width: 128,
@@ -377,7 +361,6 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 }
 
-// ─── Reusable Glass Pill ─────────────────────────────────────────
 class _GlassPill extends StatelessWidget {
   final Widget child;
   final EdgeInsets padding;
@@ -406,7 +389,6 @@ class _GlassPill extends StatelessWidget {
   }
 }
 
-// ─── Feature Pill (emerald text) ─────────────────────────────────
 class _FeaturePill extends StatelessWidget {
   final String label;
   final bool showDot;
@@ -450,7 +432,6 @@ class _FeaturePill extends StatelessWidget {
   }
 }
 
-// ─── Glass Button ────────────────────────────────────────────────
 class _GlassButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;

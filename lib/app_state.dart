@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,14 +15,8 @@ class Product {
   int stock;
   String category;
   String farm;
-
-  /// Remote image URL (loads from the internet).
   String image;
-
-  /// Local device file path picked via camera / gallery.
-  /// When non-empty, this is used instead of [image].
   String localImagePath;
-
   String tag;
   double rating;
   bool active;
@@ -124,7 +119,8 @@ class CustomerOrder {
   int get total => items.fold(0, (s, i) => s + i.subtotal);
 
   String get itemSummary => items
-      .map((i) => '${i.productName} (${i.qty}${i.qty > 1 ? " units" : " unit"})')
+      .map((i) =>
+          '${i.productName} (${i.qty}${i.qty > 1 ? " units" : " unit"})')
       .join(', ');
 
   Map<String, dynamic> toMap() => {
@@ -231,7 +227,55 @@ class FarmerProfile {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  APP STATE — local persistence via SharedPreferences
+//  APP USER MODEL (AUTH)
+// ═══════════════════════════════════════════════════════════════════
+
+class AppUser {
+  final String id;
+  String name;
+  String email;
+  String password;
+  String role; // 'farmer' | 'customer'
+  String phone;
+  String avatarUrl;
+  String localAvatarPath;
+
+  AppUser({
+    required this.id,
+    required this.name,
+    required this.email,
+    required this.password,
+    required this.role,
+    this.phone = '',
+    this.avatarUrl = '',
+    this.localAvatarPath = '',
+  });
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'name': name,
+        'email': email,
+        'password': password,
+        'role': role,
+        'phone': phone,
+        'avatarUrl': avatarUrl,
+        'localAvatarPath': localAvatarPath,
+      };
+
+  factory AppUser.fromMap(Map<String, dynamic> m) => AppUser(
+        id: m['id'],
+        name: m['name'],
+        email: m['email'],
+        password: m['password'],
+        role: m['role'],
+        phone: m['phone'] ?? '',
+        avatarUrl: m['avatarUrl'] ?? '',
+        localAvatarPath: m['localAvatarPath'] ?? '',
+      );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  APP STATE
 // ═══════════════════════════════════════════════════════════════════
 
 class AppState extends ChangeNotifier {
@@ -243,10 +287,23 @@ class AppState extends ChangeNotifier {
   static const _kReviews = 'agt_reviews_v1';
   static const _kProfile = 'agt_profile_v1';
   static const _kSeeded = 'agt_seeded_v1';
+  static const _kUsers = 'agt_users_v2';
+  static const _kSession = 'agt_session_v1';
 
   SharedPreferences? _prefs;
   bool _ready = false;
   bool get isReady => _ready;
+
+  // ── AUTH ──────────────────────────────────────────────────────
+  AppUser? _currentUser;
+  AppUser? get currentUser => _currentUser;
+  bool get isLoggedIn => _currentUser != null;
+
+  List<AppUser> _users = [];
+
+  // ── CONNECTIVITY ──────────────────────────────────────────────
+  bool _isOnline = true;
+  bool get isOnline => _isOnline;
 
   // ── In-memory copies ──────────────────────────────────────────
   List<Product> _products = [];
@@ -256,9 +313,10 @@ class AppState extends ChangeNotifier {
     name: 'John Ssemakula',
     farmName: 'Green Acres Farm',
     phone: '+256 772 123 456',
-    email: 'john@greenacres.ug',
+    email: 'farmer',
     location: 'Mukono District, Uganda',
-    bio: 'Smallholder farmer growing fresh vegetables and grains for over 10 years.',
+    bio:
+        'Smallholder farmer growing fresh vegetables and grains for over 10 years.',
     avatarUrl:
         'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
   );
@@ -281,7 +339,7 @@ class AppState extends ChangeNotifier {
   int get lowStockCount => _products.where((p) => p.stock <= 5).length;
 
   // ═══════════════════════════════════════════════════════════════
-  //  INITIALIZATION
+  //  INIT
   // ═══════════════════════════════════════════════════════════════
   Future<void> init() async {
     if (_ready) return;
@@ -293,6 +351,9 @@ class AppState extends ChangeNotifier {
     } else {
       _loadFromDisk();
     }
+    _loadUsers();
+    _restoreSession();
+    await _checkConnectivity();
     _ready = true;
     notifyListeners();
   }
@@ -423,8 +484,7 @@ class AppState extends ChangeNotifier {
         customerPhone: '+256 703 333 333',
         deliveryAddress: 'Mukono, Seeta',
         items: const [
-          OrderItem(
-              productName: 'Fresh Vine Tomatoes', price: 4000, qty: 2),
+          OrderItem(productName: 'Fresh Vine Tomatoes', price: 4000, qty: 2),
         ],
         status: 'Delivered',
         paymentMethod: 'MTN Mobile Money',
@@ -482,6 +542,204 @@ class AppState extends ChangeNotifier {
 
   Future<void> _persistProfile() async {
     await _prefs!.setString(_kProfile, jsonEncode(_profile.toMap()));
+  }
+
+  Future<void> _persistUsers() async {
+    await _prefs!.setString(
+        _kUsers, jsonEncode(_users.map((e) => e.toMap()).toList()));
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  CONNECTIVITY
+  // ═══════════════════════════════════════════════════════════════
+  Future<void> _checkConnectivity() async {
+    try {
+      final result = await InternetAddress.lookup('google.com')
+          .timeout(const Duration(seconds: 3));
+      final online =
+          result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+      _setOnline(online);
+    } catch (_) {
+      _setOnline(false);
+    }
+  }
+
+  void _setOnline(bool online) {
+    if (_isOnline == online) return;
+    _isOnline = online;
+    notifyListeners();
+  }
+
+  Future<void> refreshConnectivity() async {
+    await _checkConnectivity();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  AUTH / USERS
+  // ═══════════════════════════════════════════════════════════════
+  void _loadUsers() {
+    final raw = _prefs!.getString(_kUsers);
+    if (raw != null) {
+      _users = (jsonDecode(raw) as List)
+          .map((e) => AppUser.fromMap(e as Map<String, dynamic>))
+          .toList();
+    }
+    // Seed default accounts if missing
+    final hasCustomer = _users.any((u) => u.email == 'customer');
+    final hasFarmer = _users.any((u) => u.email == 'farmer');
+    bool changed = false;
+    if (!hasCustomer) {
+      _users.add(AppUser(
+        id: 'u_customer_default',
+        name: 'Customer',
+        email: 'customer',
+        password: 'password',
+        role: 'customer',
+        phone: '+256 700 000 001',
+        avatarUrl:
+            'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80',
+      ));
+      changed = true;
+    }
+    if (!hasFarmer) {
+      _users.add(AppUser(
+        id: 'u_farmer_default',
+        name: 'John Ssemakula',
+        email: 'farmer',
+        password: 'password',
+        role: 'farmer',
+        phone: '+256 772 123 456',
+        avatarUrl:
+            'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
+      ));
+      changed = true;
+    }
+    if (changed) _persistUsers();
+  }
+
+  void _restoreSession() {
+    final raw = _prefs!.getString(_kSession);
+    if (raw != null) {
+      final id = jsonDecode(raw) as String;
+      final match = _users.where((u) => u.id == id);
+      if (match.isNotEmpty) {
+        _currentUser = match.first;
+        _applyUserToProfile();
+      }
+    }
+  }
+
+  void _applyUserToProfile() {
+    if (_currentUser == null) return;
+    if (_currentUser!.role == 'farmer') {
+      _profile = FarmerProfile(
+        name: _currentUser!.name,
+        farmName: _profile.farmName,
+        phone: _currentUser!.phone.isNotEmpty
+            ? _currentUser!.phone
+            : _profile.phone,
+        email: _currentUser!.email,
+        location: _profile.location,
+        bio: _profile.bio,
+        avatarUrl: _currentUser!.avatarUrl.isNotEmpty
+            ? _currentUser!.avatarUrl
+            : _profile.avatarUrl,
+        rating: _profile.rating,
+        totalReviews: _profile.totalReviews,
+      );
+    }
+  }
+
+  /// Returns null on success, error message otherwise.
+  String? login({
+    required String identifier,
+    required String password,
+    required String role,
+  }) {
+    final id = identifier.trim().toLowerCase();
+    final match = _users.where((u) =>
+        u.role == role &&
+        (u.email.toLowerCase() == id ||
+            u.name.toLowerCase() == id ||
+            u.id == identifier.trim()));
+    if (match.isEmpty) {
+      return 'No $role account found for "$identifier".';
+    }
+    final user = match.first;
+    if (user.password != password) {
+      return 'Incorrect password.';
+    }
+    _currentUser = user;
+    _prefs!.setString(_kSession, jsonEncode(user.id));
+    _applyUserToProfile();
+    notifyListeners();
+    return null;
+  }
+
+  String? register({
+    required String name,
+    required String email,
+    required String password,
+    required String role,
+    String phone = '',
+  }) {
+    final e = email.trim().toLowerCase();
+    if (_users.any((u) =>
+        u.email.toLowerCase() == e && u.role == role)) {
+      return 'An account with this email already exists for $role.';
+    }
+    final u = AppUser(
+      id: 'u_${DateTime.now().millisecondsSinceEpoch}',
+      name: name.trim(),
+      email: email.trim(),
+      password: password,
+      role: role,
+      phone: phone.trim(),
+    );
+    _users.add(u);
+    _persistUsers();
+    _currentUser = u;
+    _prefs!.setString(_kSession, jsonEncode(u.id));
+    _applyUserToProfile();
+    notifyListeners();
+    return null;
+  }
+
+  Future<void> logout() async {
+    _currentUser = null;
+    await _prefs!.remove(_kSession);
+    notifyListeners();
+  }
+
+  Future<void> updateCurrentUserAvatar({
+    String? avatarUrl,
+    String? localAvatarPath,
+  }) async {
+    if (_currentUser == null) return;
+    if (avatarUrl != null) _currentUser!.avatarUrl = avatarUrl;
+    if (localAvatarPath != null) {
+      _currentUser!.localAvatarPath = localAvatarPath;
+    }
+    if (_currentUser!.role == 'farmer') {
+      _profile = FarmerProfile(
+        name: _currentUser!.name,
+        farmName: _profile.farmName,
+        phone: _currentUser!.phone.isNotEmpty
+            ? _currentUser!.phone
+            : _profile.phone,
+        email: _currentUser!.email,
+        location: _profile.location,
+        bio: _profile.bio,
+        avatarUrl: _currentUser!.avatarUrl.isNotEmpty
+            ? _currentUser!.avatarUrl
+            : _profile.avatarUrl,
+        rating: _profile.rating,
+        totalReviews: _profile.totalReviews,
+      );
+      await _persistProfile();
+    }
+    await _persistUsers();
+    notifyListeners();
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -543,7 +801,6 @@ class AppState extends ChangeNotifier {
     required int rating,
     required String comment,
   }) async {
-    // Replace existing review from this customer, or insert new.
     _reviews.removeWhere((r) => r.customerName == customerName);
     _reviews.insert(
       0,
@@ -555,7 +812,6 @@ class AppState extends ChangeNotifier {
       ),
     );
 
-    // Recompute aggregate rating on farmer profile.
     final total = _reviews.fold<int>(0, (s, r) => s + r.rating);
     final avg = _reviews.isEmpty ? 0.0 : total / _reviews.length;
 
@@ -598,6 +854,12 @@ class AppState extends ChangeNotifier {
       rating: _profile.rating,
       totalReviews: _profile.totalReviews,
     );
+    if (_currentUser != null && _currentUser!.role == 'farmer') {
+      if (name != null) _currentUser!.name = name;
+      if (phone != null) _currentUser!.phone = phone;
+      if (email != null) _currentUser!.email = email;
+      await _persistUsers();
+    }
     notifyListeners();
     await _persistProfile();
   }
@@ -617,7 +879,6 @@ class AppState extends ChangeNotifier {
         (m) => '${m[1]},',
       );
 
-  /// Call from main() to bootstrap once.
   static Future<void> bootstrap() async {
     await instance.init();
   }

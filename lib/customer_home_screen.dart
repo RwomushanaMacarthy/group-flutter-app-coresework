@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'color_typography.dart';
 import 'app_state.dart';
 import 'product_image_view.dart';
@@ -14,7 +16,6 @@ class CustomerHomeScreen extends StatefulWidget {
 class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   late int _selectedNavIndex;
 
-  // Cart: product name -> {price, count, image, localImagePath}
   final Map<String, Map<String, dynamic>> _cartItems = {};
 
   @override
@@ -89,15 +90,15 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       ));
     });
 
-    // Prefer a URL for the order image; fall back to first product's URL
     final firstItem = _cartItems.values.first;
     final orderImage = (firstItem['image'] as String?) ?? '';
+    final me = s.currentUser;
 
     s.addOrder(CustomerOrder(
       id: s.newOrderId(),
       dateTime: DateTime.now(),
-      customerName: s.profile.name,
-      customerPhone: s.profile.phone,
+      customerName: me?.name ?? s.profile.name,
+      customerPhone: me?.phone ?? s.profile.phone,
       deliveryAddress: 'Kampala Central',
       items: items,
       status: 'Pending',
@@ -309,7 +310,6 @@ class _CustomerHomeContentState extends State<CustomerHomeContent> {
 
   @override
   Widget build(BuildContext context) {
-    // Rebuild when AppState changes (new products, etc)
     return AnimatedBuilder(
       animation: AppState.instance,
       builder: (context, _) {
@@ -389,6 +389,7 @@ class _CustomerHomeContentState extends State<CustomerHomeContent> {
   }
 
   Widget _buildHeader() {
+    final user = AppState.instance.currentUser;
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
       color: Colors.white,
@@ -408,9 +409,9 @@ class _CustomerHomeContentState extends State<CustomerHomeContent> {
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
+              children: [
                 Row(
-                  children: [
+                  children: const [
                     Text('AGRO TRADE',
                         style: TextStyle(
                             fontSize: 10,
@@ -422,8 +423,13 @@ class _CustomerHomeContentState extends State<CustomerHomeContent> {
                         size: 12, color: AppColors.slate500),
                   ],
                 ),
-                Text('Kampala, Uganda',
-                    style: TextStyle(
+                Text(
+                    user?.name.isNotEmpty == true
+                        ? 'Hi, ${user!.name.split(" ").first}'
+                        : 'Kampala, Uganda',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         color: AppColors.slate900)),
@@ -1455,11 +1461,12 @@ class _OrdersTabState extends State<_OrdersTab> {
 
   Future<void> _reorder(CustomerOrder o) async {
     final s = AppState.instance;
+    final me = s.currentUser;
     await s.addOrder(CustomerOrder(
       id: s.newOrderId(),
       dateTime: DateTime.now(),
-      customerName: s.profile.name,
-      customerPhone: s.profile.phone,
+      customerName: me?.name ?? s.profile.name,
+      customerPhone: me?.phone ?? s.profile.phone,
       deliveryAddress: o.deliveryAddress,
       items: o.items
           .map((i) =>
@@ -1572,7 +1579,10 @@ class _OrdersTabState extends State<_OrdersTab> {
   }
 
   String _formatDate(DateTime d) {
-    const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const m = [
+      'Jan','Feb','Mar','Apr','May','Jun',
+      'Jul','Aug','Sep','Oct','Nov','Dec'
+    ];
     final h = d.hour > 12 ? d.hour - 12 : (d.hour == 0 ? 12 : d.hour);
     final ap = d.hour >= 12 ? 'PM' : 'AM';
     return '${d.day} ${m[d.month - 1]}, $h:${d.minute.toString().padLeft(2, '0')} $ap';
@@ -1580,17 +1590,110 @@ class _OrdersTabState extends State<_OrdersTab> {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  PROFILE TAB
+//  PROFILE TAB (with avatar editing + logout)
 // ═══════════════════════════════════════════════════════════════════
-class _ProfileTab extends StatelessWidget {
+class _ProfileTab extends StatefulWidget {
   const _ProfileTab();
+
+  @override
+  State<_ProfileTab> createState() => _ProfileTabState();
+}
+
+class _ProfileTabState extends State<_ProfileTab> {
+  final _picker = ImagePicker();
+
+  Future<void> _pickAvatar() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Change Profile Photo',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.slate900)),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined,
+                  color: AppColors.brand700),
+              title: const Text('Take a photo'),
+              onTap: () => Navigator.pop(context, 'camera'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined,
+                  color: AppColors.brand700),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.pop(context, 'gallery'),
+            ),
+            if (AppState.instance.currentUser != null &&
+                AppState.instance.currentUser!.localAvatarPath.isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.delete_outline,
+                    color: AppColors.statusRejectedText),
+                title: const Text('Remove photo'),
+                onTap: () => Navigator.pop(context, 'remove'),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null) return;
+    if (choice == 'remove') {
+      await AppState.instance
+          .updateCurrentUserAvatar(localAvatarPath: '');
+      return;
+    }
+    final src = choice == 'camera' ? ImageSource.camera : ImageSource.gallery;
+    final f =
+        await _picker.pickImage(source: src, imageQuality: 75, maxWidth: 600);
+    if (f != null) {
+      await AppState.instance
+          .updateCurrentUserAvatar(localAvatarPath: f.path);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: AppState.instance,
       builder: (context, _) {
-        final p = AppState.instance.profile;
+        final u = AppState.instance.currentUser;
+        if (u == null) return const SizedBox.shrink();
+
+        Widget avatar;
+        if (u.localAvatarPath.isNotEmpty &&
+            File(u.localAvatarPath).existsSync()) {
+          avatar = CircleAvatar(
+            radius: 40,
+            backgroundImage: FileImage(File(u.localAvatarPath)),
+            backgroundColor: AppColors.brand200,
+          );
+        } else if (u.avatarUrl.isNotEmpty) {
+          avatar = CircleAvatar(
+            radius: 40,
+            backgroundImage: NetworkImage(u.avatarUrl),
+            backgroundColor: AppColors.brand200,
+          );
+        } else {
+          avatar = CircleAvatar(
+            radius: 40,
+            backgroundColor: AppColors.brand700,
+            child: Text(
+              u.name.isNotEmpty ? u.name[0].toUpperCase() : '?',
+              style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white),
+            ),
+          );
+        }
+
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
@@ -1603,19 +1706,37 @@ class _ProfileTab extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  CircleAvatar(
-                    radius: 40,
-                    backgroundImage: NetworkImage(p.avatarUrl),
-                    backgroundColor: AppColors.brand200,
+                  Stack(
+                    children: [
+                      avatar,
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: GestureDetector(
+                          onTap: _pickAvatar,
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                  color: AppColors.brand200, width: 2),
+                            ),
+                            child: const Icon(Icons.camera_alt,
+                                size: 14, color: AppColors.brand700),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 10),
-                  Text(p.name,
+                  Text(u.name,
                       style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Colors.white)),
                   const SizedBox(height: 2),
-                  Text(p.farmName,
+                  Text(u.email,
                       style: TextStyle(
                           fontSize: 12,
                           color: Colors.white.withOpacity(0.85))),
@@ -1623,13 +1744,17 @@ class _ProfileTab extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            _infoCard('Phone', p.phone),
-            _infoCard('Email', p.email),
-            _infoCard('Location', p.location),
+            _infoCard('Phone', u.phone.isEmpty ? '—' : u.phone),
+            _infoCard('Email', u.email),
+            _infoCard('Role', u.role.toUpperCase()),
             const SizedBox(height: 16),
             TextButton(
-              onPressed: () => Navigator.of(context)
-                  .pushNamedAndRemoveUntil('/', (r) => false),
+              onPressed: () async {
+                await AppState.instance.logout();
+                if (!context.mounted) return;
+                Navigator.of(context)
+                    .pushNamedAndRemoveUntil('/', (r) => false);
+              },
               child: const Text('Log Out',
                   style: TextStyle(color: AppColors.statusRejectedText)),
             ),
