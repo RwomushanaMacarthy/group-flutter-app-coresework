@@ -16,8 +16,9 @@ class _AuthScreenState extends State<AuthScreen> {
   bool isFarmerRole = false;
   bool obscurePassword = true;
   bool rememberDevice = true;
+  bool _isLoading = false;
 
-  final _identifierCtrl = TextEditingController(); // Used for Email in register mode
+  final _identifierCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
@@ -46,10 +47,18 @@ class _AuthScreenState extends State<AuthScreen> {
     });
   }
 
-  void _toggleMode() => setState(() => isLoginMode = !isLoginMode);
+  void _toggleMode() {
+    setState(() {
+      isLoginMode = !isLoginMode;
+    });
+  }
 
-  void _handleSubmit() {
+  void _handleSubmit() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+
     final s = AppState.instance;
+    String successMsg = '';
 
     if (isLoginMode) {
       final err = s.login(
@@ -57,44 +66,74 @@ class _AuthScreenState extends State<AuthScreen> {
         password: _passwordCtrl.text,
         role: isFarmerRole ? 'farmer' : 'customer',
       );
+      
       if (err != null) {
+        setState(() => _isLoading = false);
         _snack(err, error: true);
         return;
       }
+      successMsg = 'Logged in successfully!';
+      
     } else {
-      // Validating the actual controllers used in the form
+      // Validating fields
       if (_nameCtrl.text.trim().isEmpty ||
           _identifierCtrl.text.trim().isEmpty ||
           _passwordCtrl.text.isEmpty) {
+        setState(() => _isLoading = false);
         _snack('Please fill in all required fields', error: true);
         return;
       }
       
       final err = s.register(
         name: _nameCtrl.text,
-        email: _identifierCtrl.text, // Using identifier as email
+        email: _identifierCtrl.text,
         password: _passwordCtrl.text,
         role: isFarmerRole ? 'farmer' : 'customer',
         phone: _phoneCtrl.text,
       );
+      
       if (err != null) {
+        setState(() => _isLoading = false);
         _snack(err, error: true);
         return;
       }
+      successMsg = 'Account created successfully!';
     }
 
-    // Navigation is handled automatically by _RootRouter in main.dart!
+    // 1. Show the success message
+    _snack(successMsg, error: false);
+
+    // 2. Wait 800ms so the user can read the toast
+    await Future.delayed(const Duration(milliseconds: 800));
+
+    if (!mounted) return;
+
+    // 3. Jump directly to the correct dashboard
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (_) => isFarmerRole
+            ? const FarmerDashboardScreen()
+            : const CustomerHomeScreen(),
+      ),
+      (route) => false, 
+    );
   }
 
   void _snack(String msg, {bool error = false}) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
-        content: Text(msg),
+        content: Text(
+          msg,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
         backgroundColor:
             error ? AppColors.statusRejectedText : AppColors.brand700,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: AppRadii.mdR),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(milliseconds: 800), // Matches the wait time
       ));
   }
 
@@ -381,7 +420,7 @@ class _AuthScreenState extends State<AuthScreen> {
         const SizedBox(height: 14),
         _buildPrimaryButton(),
         const SizedBox(height: 12),
-        _buildBiometricButton(), // This is now disabled
+        _buildBiometricButton(),
       ],
     );
   }
@@ -440,37 +479,50 @@ class _AuthScreenState extends State<AuthScreen> {
 
   Widget _buildPrimaryButton() {
     return GestureDetector(
-      onTap: _handleSubmit,
+      onTap: _isLoading ? null : _handleSubmit,
       child: Container(
         height: 48,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [
-              AppColors.brand700,
-              AppColors.brand800,
-              AppColors.brand900,
-            ],
+          gradient: LinearGradient(
+            colors: _isLoading 
+                ? [AppColors.stone400, AppColors.stone400]
+                : [
+                    AppColors.brand700,
+                    AppColors.brand800,
+                    AppColors.brand900,
+                  ],
           ),
           borderRadius: AppRadii.mdR,
-          boxShadow: AppShadows.brandGlow,
+          boxShadow: _isLoading ? [] : AppShadows.brandGlow,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              isLoginMode ? 'Log In' : 'Register',
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
+            if (_isLoading)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            else ...[
+              Text(
+                isLoginMode ? 'Log In' : 'Register',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
               ),
-            ),
-            const SizedBox(width: 6),
-            const Icon(
-              Icons.arrow_forward,
-              size: 16,
-              color: AppColors.brand200,
-            ),
+              const SizedBox(width: 6),
+              const Icon(
+                Icons.arrow_forward,
+                size: 16,
+                color: AppColors.brand200,
+              ),
+            ],
           ],
         ),
       ),
@@ -478,7 +530,6 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Widget _buildBiometricButton() {
-    // DISABLED: onPressed is set to null to grey it out
     return OutlinedButton.icon(
       onPressed: null, 
       icon: const Icon(Icons.fingerprint, size: 18, color: AppColors.stone400),
@@ -487,12 +538,12 @@ class _AuthScreenState extends State<AuthScreen> {
         style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w700,
-          color: AppColors.stone400, // Greyed out text
+          color: AppColors.stone400,
         ),
       ),
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 14),
-        backgroundColor: AppColors.stone100, // Greyed out background
+        backgroundColor: AppColors.stone100,
         disabledForegroundColor: AppColors.stone400,
         disabledBackgroundColor: AppColors.stone100,
         side: const BorderSide(color: AppColors.stone200),
